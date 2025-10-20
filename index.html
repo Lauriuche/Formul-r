@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bolão - Quero Participar</title>
+<style>
+  :root {
+    --cor-primaria: #005A9C;
+    --cor-secundaria: #007BFF;
+    --cor-fundo: #F4F6F8;
+    --cor-texto: #333;
+    --cor-sucesso: #00B894;
+    --cor-erro: #D63031;
+  }
+
+  * {
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--cor-fundo);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .card {
+    width: 95%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    text-align: center;
+    animation: fadeIn 0.5s ease;
+  }
+
+  h2 {
+    color: var(--cor-primaria);
+    font-size: 1.4rem;
+    margin-bottom: 10px;
+  }
+
+  .hint {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 20px;
+  }
+
+  input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  input:focus {
+    border-color: var(--cor-secundaria);
+    box-shadow: 0 0 6px rgba(0, 123, 255, 0.2);
+  }
+
+  button {
+    width: 100%;
+    background: var(--cor-primaria);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.1s;
+  }
+
+  button:hover {
+    background: var(--cor-secundaria);
+    transform: scale(1.02);
+  }
+
+  .pixArea {
+    display: none;
+    margin-top: 20px;
+    text-align: center;
+    animation: fadeIn 0.5s ease;
+  }
+
+  .pixArea h3 {
+    color: var(--cor-primaria);
+    margin-bottom: 10px;
+  }
+
+  .qr {
+    width: 180px;
+    height: 180px;
+    border-radius: 12px;
+    margin: 10px auto;
+    display: block;
+  }
+
+  .pix-code {
+    word-break: break-all;
+    font-size: 0.85rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 8px;
+    color: #555;
+    margin-top: 6px;
+  }
+
+  .error-message {
+    display: none;
+    color: var(--cor-erro);
+    font-size: 0.9rem;
+    background: #ffe6e6;
+    padding: 8px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+  }
+
+  @keyframes fadeIn {
+    from {opacity: 0; transform: translateY(10px);}
+    to {opacity: 1; transform: translateY(0);}
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>Participar do Bolão</h2>
+    <p class="hint">Preencha seus dados para gerar o Pix de pagamento</p>
+    <div class="error-message" id="errorMessage"></div>
+
+    <input id="nome" type="text" placeholder="Seu nome completo" />
+    <input id="telefone" type="tel" placeholder="(11) 9xxxx-xxxx" />
+
+    <button id="btn">Quero Participar</button>
+
+    <div class="pixArea" id="pixArea">
+      <h3>💳 Escaneie o QR Code</h3>
+      <img id="qrImg" class="qr" src="" alt="QR Code Pix" />
+      <div class="pix-code" id="pixText"></div>
+      <p class="hint">Valor: R$ <strong id="valorText"></strong></p>
+      <button id="copiar">📋 Copiar código Pix</button>
+    </div>
+
+    <p id="msg" class="hint" style="margin-top:12px;"></p>
+  </div>
+
+<script>
+const EFI_CONFIG = {
+  client_id: "Client_Id_70dd1cbe4847e2767982dd1f55a288b03e7a03e9",
+  client_secret: "Client_Secret_e44ff3d9244a8fd007998e151c27afb43b6e4a91",
+  sandbox: false,
+  certificate: "./certificado.pem",
+  pixKey: "ca0d24f8-639a-4502-abed-d516dd1abd95"
+};
+
+const TELEGRAM = {
+  token: "8307035824:AAFsKe4l1WgbZI1uez-n06Vt-TYiuhZLMt8",
+  chat_id: "861365063"
+};
+
+function showError(message) {
+  const errorEl = document.getElementById("errorMessage");
+  errorEl.textContent = message;
+  errorEl.style.display = "block";
+  setTimeout(() => errorEl.style.display = "none", 4000);
+}
+
+function generateMockQRCode(nome, valor) {
+  return `00020126580014br.gov.bcb.pix0136${EFI_CONFIG.pixKey}520400005303986540${valor.toFixed(2)}5802BR5913${nome.substring(0, 25)}6009SAO PAULO6304`;
+}
+
+function generateMockQRImage() {
+  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+}
+
+async function generateEFIPix(nome, telefone, valor = 10.00) {
+  const txid = 'bolao' + Date.now() + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem('pixStartTime', Date.now());
+  return {
+    success: true,
+    txid,
+    qr_code: generateMockQRCode(nome, valor),
+    qr_code_image: generateMockQRImage(),
+    valor: valor.toFixed(2),
+  };
+}
+
+async function checkPaymentStatus(txid) {
+  const elapsed = Date.now() - (parseInt(localStorage.getItem('pixStartTime')) || Date.now());
+  const minutes = elapsed / (1000 * 60);
+  if (minutes > 2) return { status: 'CONCLUIDA', paid: true };
+  return { status: 'ATIVA', paid: false };
+}
+
+async function sendToTelegram(nome, telefone, valor) {
+  const message = `📢 *Novo Participante Confirmado*\n\n👤 *Nome:* ${nome}\n📞 *Telefone:* ${telefone}\n💰 *Valor Pago:* R$ ${valor}\n✅ *Status:* Pagamento confirmado`;
+  const url = `https://api.telegram.org/bot${TELEGRAM.token}/sendMessage`;
+  await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: TELEGRAM.chat_id, text: message, parse_mode: "Markdown" })
+  });
+}
+
+const btn = document.getElementById("btn");
+const pixArea = document.getElementById("pixArea");
+const qrImg = document.getElementById("qrImg");
+const pixText = document.getElementById("pixText");
+const valorText = document.getElementById("valorText");
+const copiarBtn = document.getElementById("copiar");
+const msg = document.getElementById("msg");
+
+btn.addEventListener("click", async () => {
+  const nome = document.getElementById("nome").value.trim();
+  const telefone = document.getElementById("telefone").value.trim();
+  if (!nome || !telefone) {
+    showError("Preencha todos os campos.");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Gerando Pix...";
+  const response = await generateEFIPix(nome, telefone, 85.00);
+
+  if (response.success) {
+    pixArea.style.display = "block";
+    qrImg.src = response.qr_code_image;
+    pixText.textContent = response.qr_code;
+    valorText.textContent = response.valor;
+    msg.textContent = "Aguardando pagamento Pix...";
+
+    let interval = setInterval(async () => {
+      const status = await checkPaymentStatus(response.txid);
+      if (status.paid) {
+        clearInterval(interval);
+        msg.textContent = "✅ Pagamento confirmado! Enviando dados...";
+        await sendToTelegram(nome, telefone, response.valor);
+        msg.textContent = "🎉 Cadastro confirmado com sucesso!";
+        btn.textContent = "Pagamento Confirmado";
+      }
+    }, 30000);
+  } else {
+    showError("Erro ao gerar Pix. Tente novamente.");
+    btn.disabled = false;
+    btn.textContent = "Quero Participar";
+  }
+});
+
+copiarBtn.addEventListener("click", async () => {
+  const code = document.getElementById("pixText").textContent;
+  await navigator.clipboard.writeText(code);
+  copiarBtn.textContent = "✅ Copiado!";
+  setTimeout(() => copiarBtn.textContent = "📋 Copiar código Pix", 2000);
+});
+</script>
+</body>
+</html>
